@@ -1,0 +1,24 @@
+pkglists:
+  - name: arch-official # Contains all packages that are from the official online arch repository
+    list: comm -23 <(pacman -Qe | sort) <(pacman -Qm | sort) | sed -E 's/([^ ]+) .*/\1/g'
+    remove: sudo pacman --noconfirm -Rns $PKGS
+    default-source: arch-repo
+
+  - name: arch-unofficial # Contains packages that are installed, but from unofficial sources
+    list: pacman -Qm | sed -E 's/([^ ]+) .*/\1/g'
+    remove: yay --noconfirm -Rns $PKGS
+    default-source: aur
+
+sources:
+  - name: arch-repo # The official arch repo source
+    default: true
+    pkglist: arch-official
+    install: sudo pacman --noconfirm -S $PKGS
+
+  - name: aur # The AUR
+    pkglist: arch-unofficial
+    install: yay --noconfirm -S $PKGS
+
+  - name: abs-manual # Source for manual installation via ABS
+    pkglist: arch-unofficial
+    install: echo "Install manual packages!"

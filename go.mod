@@ -1,3 +1,11 @@
 module github.com/quid256/dux
 
 go 1.15
+
+require (
+	github.com/Songmu/prompter v0.4.0
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/mitchellh/go-homedir v1.1.0
+	github.com/spf13/cobra v1.1.1
+	github.com/spf13/viper v1.7.1
+)
