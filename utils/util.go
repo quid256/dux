@@ -79,23 +79,33 @@ func GetTargetPackages(cfg *Config, targetDir string) (map[string](map[string]st
 
 		contentsNoComments := commentRe.ReplaceAllString(string(contents), "")
 
-		defaultSrc := cfg.GetDefaultSource()
+		curSrc := ""
+		tempSrc := ""
 
-		src := ""
 		for _, ident := range identRe.FindAllString(contentsNoComments, -1) {
-			if ident[0] == '(' && ident[len(ident)-1] == ')' {
-				if src != "" {
-					return fmt.Errorf("Cannot have 2 adjacent sources: (%s) and (%s)", src, ident[1:len(ident)-1])
+			if ident[0] == '[' && ident[len(ident)-1] == ']' {
+				curSrc = ident[1 : len(ident)-1]
+			} else if ident[0] == '(' && ident[len(ident)-1] == ')' {
+				if tempSrc != "" {
+					return fmt.Errorf("Cannot have 2 adjacent temporary sources: (%s) and (%s)", tempSrc, ident[1:len(ident)-1])
 				}
 
-				src = ident[1 : len(ident)-1]
+				tempSrc = ident[1 : len(ident)-1]
 			} else {
-				if src == "" && defaultSrc.Name != "" {
-					src = defaultSrc.Name
+				var source string
+
+				if tempSrc != "" {
+					source = tempSrc
+					tempSrc = ""
+				} else if curSrc != "" {
+					source = curSrc
+				} else {
+					return fmt.Errorf("No source defined for package: %s", ident)
 				}
-				srcObj, ok := cfg.GetSource(src)
+
+				srcObj, ok := cfg.GetSource(source)
 				if !ok {
-					return fmt.Errorf("No such source found: %s", src)
+					return fmt.Errorf("No such source found: %s", source)
 				}
 
 				if _, ok := targetPkgs[srcObj.PkgList]; !ok {
@@ -106,8 +116,7 @@ func GetTargetPackages(cfg *Config, targetDir string) (map[string](map[string]st
 					return fmt.Errorf("Multiple packages with same name in %s: %s", srcObj.PkgList, ident)
 				}
 
-				targetPkgs[srcObj.PkgList][ident] = src
-				src = ""
+				targetPkgs[srcObj.PkgList][ident] = source
 			}
 		}
 		return nil

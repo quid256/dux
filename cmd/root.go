@@ -59,19 +59,10 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
 	rootCmd.PersistentFlags().StringVar(&cfgDir, "config", "", "config directory (default is $HOME/.config/dux/)")
-	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "If set, will print command that would be run instead of running them")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().BoolVar(&dryRun, "dry", false, "If set, will print commands that would be run instead of running them")
 }
 
-// initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Find home directory.
 	home, err := homedir.Dir()
@@ -80,6 +71,7 @@ func initConfig() {
 		os.Exit(1)
 	}
 
+	// Add the dux configuration dir to the source path
 	if cfgDir == "" {
 		cfgDir = path.Join(home, ".config/dux/")
 	}

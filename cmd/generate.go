@@ -38,9 +38,6 @@ import (
 var generateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Generates a Dux package index",
-	Long: `Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := utils.ConfigFromViper()
 		if err != nil {
@@ -51,12 +48,10 @@ to quickly create a Cobra application.`,
 		var b strings.Builder
 
 		for _, pkglist := range cfg.PkgLists {
-			src, _ := cfg.GetSource(pkglist.DefaultSource)
-
 			var prefix string
-			if !src.Default {
-				prefix = fmt.Sprintf("(%s) ", src.Name)
-			}
+
+			src, _ := cfg.GetSource(pkglist.DefaultSource)
+			prefix = fmt.Sprintf("(%s) ", src.Name)
 
 			cmd := exec.Command("bash", "-c", pkglist.ListCmd)
 
@@ -88,14 +83,4 @@ to quickly create a Cobra application.`,
 
 func init() {
 	rootCmd.AddCommand(generateCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// generateCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// generateCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

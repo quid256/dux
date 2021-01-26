@@ -46,7 +46,6 @@ type (
 	// PkgSource represents the config for a package source
 	PkgSource struct {
 		Name       string
-		Default    bool
 		PkgList    string
 		InstallCmd string `mapstructure:"install"`
 	}
@@ -76,21 +75,12 @@ func (c *Config) Validate() error {
 	}
 
 	pkgSourceNames := make(map[string]struct{})
-	pkgSourceDefault := false
 	for i, pkgSource := range c.Sources {
 		// check for duplicate names
 		if _, ok := pkgSourceNames[pkgSource.Name]; ok {
 			return errors.New("Name collision")
 		}
 		pkgSourceNames[pkgSource.Name] = struct{}{}
-
-		// Make sure there isn't more than one package source tagged as "default"
-		if pkgSource.Default {
-			if pkgSourceDefault {
-				return fmt.Errorf("More than one pkg source listed as default: [%d]", i)
-			}
-			pkgSourceDefault = true
-		}
 
 		// validate each pkgsource
 		if err := pkgSource.validateWith(c.PkgLists); err != nil {
@@ -158,16 +148,6 @@ func (c *Config) GetList(name string) (PkgList, bool) {
 		}
 	}
 	return PkgList{}, false
-}
-
-// GetDefaultSource gets the PkgSource that doesn't require an explicit tag in the target files
-func (c *Config) GetDefaultSource() PkgSource {
-	for _, src := range c.Sources {
-		if src.Default {
-			return src
-		}
-	}
-	return PkgSource{}
 }
 
 // ConfigFromViper parses a config obj from Viper and validates it

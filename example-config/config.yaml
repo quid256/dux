@@ -1,24 +1,51 @@
 pkglists:
-  - name: arch-official # Contains all packages that are from the official online arch repository
+  - name: arch-official
     list: comm -23 <(pacman -Qe | sort) <(pacman -Qm | sort) | sed -E 's/([^ ]+) .*/\1/g'
-    remove: sudo pacman --noconfirm -Rns $PKGS
-    default-source: arch-repo
+    remove: |
+        # Find a list of all packages that no other package depends on
+        UNDEPS=$(pacman -Qt | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-  - name: arch-unofficial # Contains packages that are installed, but from unofficial sources
-    list: pacman -Qm | sed -E 's/([^ ]+) .*/\1/g'
-    remove: yay --noconfirm -Rns $PKGS
+        # If a packages has no dependers, then removal is explicit. Otherwise, the packages is just marked --asdeps
+        TOMARK=$(comm -12 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
+        TOREMOVE=$(comm -13 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
+
+        [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asdeps $TOMARK
+        [[ ! -z $(echo $TOREMOVE | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -Rns $TOREMOVE
+
+    default-source: arch-repo # TODO: maybe merge these two pkglists, and instead have default-source be a callable bash script?
+
+  - name: arch-unofficial
+    list: pacman -Qme | sed -E 's/([^ ]+) .*/\1/g'
+    remove: |
+        # Find a list of all packages that no other package depends on
+        UNDEPS=$(pacman -Qt | sed -E 's/([^ ]+) .*/\1/g' | sort)
+
+        # If a packages has no dependers, then removal is explicit. Otherwise, the packages is just marked --asdeps
+        TOMARK=$(comm -12 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
+        TOREMOVE=$(comm -13 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
+
+        [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asdeps $TOMARK
+        [[ ! -z $(echo $TOREMOVE | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -Rns $TOREMOVE
+
     default-source: aur
 
 sources:
-  - name: arch-repo # The official arch repo source
-    default: true
+  - name: arch-repo
     pkglist: arch-official
-    install: sudo pacman --noconfirm -S $PKGS
+    install: |
+        # Find a list of all packages that are already installed --asdeps
+        DEPS=$(pacman -Qd | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-  - name: aur # The AUR
-    pkglist: arch-unofficial
-    install: yay --noconfirm -S $PKGS
+        # If a package is already installed --asdeps, it need only be marked --asexplicit. Otherwise, explict install is necessary
+        TOMARK=$(comm -12 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
+        TOINSTALL=$(comm -13 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
 
-  - name: abs-manual # Source for manual installation via ABS
+        [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asexplicit $TOMARK
+        [[ ! -z $(echo $TOINSTALL | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -S $TOINSTALL
+
+  - name: aur
     pkglist: arch-unofficial
-    install: echo "Install manual packages!"
+    install: yay --noconfirm -S $PKGS # TODO this likely needs to be modified
+
+  - name: abs-manual
+    pkglist: arch-unofficial
