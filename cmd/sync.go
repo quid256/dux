@@ -81,6 +81,17 @@ to quickly create a Cobra application.`,
 			if len(srcToPkg) > 0 || len(installed) > 0 {
 				fmt.Printf("# PkgList %s\n", pkglist.Name)
 
+				if len(installed) > 0 {
+					fmt.Printf("Remove:")
+					for k := range installed {
+						fmt.Printf("  %s", k)
+					}
+					if len(installed) == 0 {
+						fmt.Printf("  (none)")
+					}
+					fmt.Println()
+				}
+
 				if len(srcToPkg) > 0 {
 					fmt.Print("Install:")
 					for k, v := range srcToPkg {
@@ -89,17 +100,6 @@ to quickly create a Cobra application.`,
 						for _, pkg := range v {
 							fmt.Printf("  %s", pkg)
 						}
-					}
-					fmt.Println()
-				}
-
-				if len(installed) > 0 {
-					fmt.Printf("Remove:")
-					for k := range installed {
-						fmt.Printf("  %s", k)
-					}
-					if len(installed) == 0 {
-						fmt.Printf("  (none)")
 					}
 					fmt.Println()
 				}
@@ -119,13 +119,16 @@ to quickly create a Cobra application.`,
 			return
 		}
 
+		if len(toRemove) > 0 {
+			fmt.Println("## Removing Packages")
+			utils.RemovePackages(cfg, toRemove, dryRun)
+		}
+
 		if len(toInstall) > 0 {
+			fmt.Println("## Installing Packages")
 			utils.InstallPackages(cfg, toInstall, dryRun)
 		}
 
-		if len(toRemove) > 0 {
-			utils.RemovePackages(cfg, toRemove, dryRun)
-		}
 	},
 }
 
