@@ -31,12 +31,12 @@ import (
 	"strings"
 )
 
-// GetInstalledPackages runs the appropriate shell commands to retrieve all of the packages installed in a given pkglist
-func GetInstalledPackages(pkglist PkgList) (map[string]struct{}, error) {
+// GetInstalledPackages runs the appropriate shell commands to retrieve all of the packages installed in a given namespace
+func GetInstalledPackages(ns Namespace) (map[string]struct{}, error) {
 
-	out, err := exec.Command("bash", "-c", pkglist.ListCmd).Output()
+	out, err := exec.Command("bash", "-c", ns.ListCmd).Output()
 	if err != nil {
-		return nil, fmt.Errorf("Error executing ListCmd for `%s`: %w", pkglist.Name, err)
+		return nil, fmt.Errorf("Error executing list-cmd: %w", err)
 	}
 
 	s := strings.Split(string(out), "\n")
@@ -58,7 +58,7 @@ func GetTargetPackages(cfg *Config, targetDir string) (map[string](map[string]st
 		return nil, fmt.Errorf("Missing target directory: %s. Perhaps run `dux generate`", targetDir)
 	}
 
-	targetPkgs := make(map[string](map[string]string))
+	mgrToTargets := make(map[string][]string)
 
 	commentRe := regexp.MustCompile(`#[^\n]*(\n|\z)`)
 	identRe := regexp.MustCompile(`[^ \r\n\t"]+`)
@@ -103,27 +103,58 @@ func GetTargetPackages(cfg *Config, targetDir string) (map[string](map[string]st
 					return fmt.Errorf("No source defined for package: %s", ident)
 				}
 
-				srcObj, ok := cfg.GetSource(source)
-				if !ok {
-					return fmt.Errorf("No such source found: %s", source)
+				if _, ok := mgrToTargets[source]; !ok {
+					mgrToTargets[source] = nil
 				}
 
-				if _, ok := targetPkgs[srcObj.PkgList]; !ok {
-					targetPkgs[srcObj.PkgList] = make(map[string]string)
-				}
-
-				if _, ok := targetPkgs[srcObj.PkgList][ident]; ok {
-					return fmt.Errorf("Multiple packages with same name in %s: %s", srcObj.PkgList, ident)
-				}
-
-				targetPkgs[srcObj.PkgList][ident] = source
+				mgrToTargets[source] = append(mgrToTargets[source], ident)
 			}
 		}
+
 		return nil
 	})
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error gathering targets: %w", err)
+	}
+
+	// maps namespaces to (packageName -> manager)
+	targetPkgs := make(map[string](map[string]string))
+
+	for mgrName, targets := range mgrToTargets {
+		mgr, ok := cfg.Managers[mgrName]
+		if !ok {
+			return nil, fmt.Errorf("No such source found: %s", mgrName)
+		}
+
+		var packageNames []string
+
+		if mgr.ExpandCmd != "" {
+			cmd := exec.Command("bash", "-c", mgr.ExpandCmd)
+			cmd.Env = append(os.Environ(),
+				fmt.Sprintf("TARGETS=%s", strings.Join(targets, " ")),
+			)
+
+			expansion, err := cmd.Output()
+			if err != nil {
+				return nil, fmt.Errorf("Unable to expand targets for manager %s", mgrName)
+			}
+
+			packageNames = strings.Split(string(expansion), "\n")
+		} else {
+			packageNames = targets
+		}
+
+		if _, ok := targetPkgs[mgr.Namespace]; !ok {
+			targetPkgs[mgr.Namespace] = make(map[string]string)
+		}
+
+		for _, pkgName := range packageNames {
+			if _, ok := targetPkgs[mgr.Namespace][pkgName]; ok {
+				return nil, fmt.Errorf("Multiple packages with same name in %s: %s", mgr.Namespace, pkgName)
+			}
+
+			targetPkgs[mgr.Namespace][pkgName] = mgrName
+		}
 	}
 
 	return targetPkgs, nil
@@ -131,15 +162,15 @@ func GetTargetPackages(cfg *Config, targetDir string) (map[string](map[string]st
 
 // InstallPackages installs the packages given a map from sources to the packages to install from with that source
 func InstallPackages(cfg *Config, pkgs map[string][]string, dryRun bool) error {
-	for _, src := range cfg.Sources {
-		toInstall, ok := pkgs[src.Name]
+	for mgrName, mgr := range cfg.Managers {
+		toInstall, ok := pkgs[mgrName]
 		if !ok {
 			continue
 		}
 		if dryRun {
-			fmt.Printf("%s %s", src.InstallCmd, strings.Join(toInstall, " "))
+			fmt.Printf("%s %s", mgr.InstallCmd, strings.Join(toInstall, " "))
 		} else {
-			cmd := exec.Command("bash", "-c", src.InstallCmd)
+			cmd := exec.Command("bash", "-c", mgr.InstallCmd)
 			cmd.Env = append(os.Environ(),
 				fmt.Sprintf("PKGS=%s", strings.Join(toInstall, " ")), // ignored
 			)
@@ -159,16 +190,16 @@ func InstallPackages(cfg *Config, pkgs map[string][]string, dryRun bool) error {
 
 // RemovePackages removes the packages given a config and a map from package lists to the package names to remove
 func RemovePackages(cfg *Config, pkgs map[string][]string, dryRun bool) error {
-	for _, pkglist := range cfg.PkgLists {
-		toRemove, ok := pkgs[pkglist.Name]
+	for nsName, ns := range cfg.Namespaces {
+		toRemove, ok := pkgs[nsName]
 		if !ok {
 			continue
 		}
 
 		if dryRun {
-			fmt.Printf("%s %s", pkglist.RemoveCmd, strings.Join(toRemove, " "))
+			fmt.Printf("%s %s", ns.RemoveCmd, strings.Join(toRemove, " "))
 		} else {
-			cmd := exec.Command("bash", "-c", pkglist.RemoveCmd)
+			cmd := exec.Command("bash", "-c", ns.RemoveCmd)
 			cmd.Env = append(os.Environ(),
 				fmt.Sprintf("PKGS=%s", strings.Join(toRemove, " ")), // ignored
 			)

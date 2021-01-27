@@ -31,123 +31,82 @@ import (
 type (
 	// Config represents a configuration for Dux
 	Config struct {
-		PkgLists []PkgList
-		Sources  []PkgSource
+		Namespaces map[string]Namespace
+		Managers   map[string]Manager
 	}
 
-	// PkgList represents the config for a local package list
-	PkgList struct {
-		Name          string
-		ListCmd       string `mapstructure:"list"`
-		RemoveCmd     string `mapstructure:"remove"`
-		DefaultSource string `mapstructure:"default-source"`
+	// Namespace represents the config for a local package list
+	Namespace struct {
+		ListCmd        string `mapstructure:"list-cmd"`
+		RemoveCmd      string `mapstructure:"remove-cmd"`
+		DefaultManager string `mapstructure:"default-manager"`
 	}
 
-	// PkgSource represents the config for a package source
-	PkgSource struct {
-		Name       string
-		PkgList    string
-		InstallCmd string `mapstructure:"install"`
+	// Manager represents the config for a package source / installer
+	Manager struct {
+		Namespace  string
+		InstallCmd string `mapstructure:"install-cmd"`
+		ExpandCmd  string `mapstructure:"expand-cmd"`
 	}
 )
 
 // Validate checks the config object for semantic errors
 func (c *Config) Validate() error {
-	if len(c.PkgLists) == 0 {
-		return errors.New("No `pkglist`s found in config")
+	if len(c.Namespaces) == 0 {
+		return errors.New("No namespaces found in config")
 	}
-	if len(c.Sources) == 0 {
-		return errors.New("No `source`s found in config")
+	if len(c.Managers) == 0 {
+		return errors.New("No managers found in config")
 	}
 
-	pkgListNames := make(map[string]struct{})
-	for i, pkgList := range c.PkgLists {
-		// check for duplicate names
-		if _, ok := pkgListNames[pkgList.Name]; ok {
-			return errors.New("Name collision")
-		}
-		pkgListNames[pkgList.Name] = struct{}{}
-
+	for name, ns := range c.Namespaces {
 		// validate each pkglist
-		if err := pkgList.validateWith(c.Sources); err != nil {
-			return fmt.Errorf("Validation error at pkglists[%d]: %w", i, err)
+		if err := ns.validateWith(c.Managers); err != nil {
+			return fmt.Errorf("Validation error for namespace \"%s\": %w", name, err)
 		}
 	}
 
-	pkgSourceNames := make(map[string]struct{})
-	for i, pkgSource := range c.Sources {
-		// check for duplicate names
-		if _, ok := pkgSourceNames[pkgSource.Name]; ok {
-			return errors.New("Name collision")
-		}
-		pkgSourceNames[pkgSource.Name] = struct{}{}
-
+	for name, mgr := range c.Managers {
 		// validate each pkgsource
-		if err := pkgSource.validateWith(c.PkgLists); err != nil {
-			return fmt.Errorf("Validation error at sources[%d]: %w", i, err)
+		if err := mgr.validateWith(c.Namespaces); err != nil {
+			return fmt.Errorf("Validation error for manager \"%s\": %w", name, err)
 		}
 	}
 
 	return nil
 }
 
-func (list *PkgList) validateWith(sources []PkgSource) error {
-	if len(list.Name) == 0 {
-		return errors.New("missing `name`")
+func (ns *Namespace) validateWith(mgrs map[string]Manager) error {
+	if len(ns.ListCmd) == 0 {
+		return errors.New("missing `list-cmd`")
 	}
-	if len(list.ListCmd) == 0 {
-		return errors.New("missing `list` command")
+	if len(ns.RemoveCmd) == 0 {
+		return errors.New("missing `remove-cmd`")
 	}
-	if len(list.RemoveCmd) == 0 {
-		return errors.New("missing `remove` command")
-	}
-	if len(list.DefaultSource) == 0 {
-		return errors.New("missing a default source `default-source`")
+	if len(ns.DefaultManager) == 0 {
+		return errors.New("missing `default-manager`")
 	}
 
-	for _, s := range sources {
-		if s.Name == list.DefaultSource {
+	for mgrName := range mgrs {
+		if mgrName == ns.DefaultManager {
 			return nil
 		}
 	}
-	return fmt.Errorf("Default source `%v` does not exist", list.DefaultSource)
+	return fmt.Errorf("Default source `%s` does not exist", ns.DefaultManager)
 }
 
-func (source *PkgSource) validateWith(lists []PkgList) error {
-	if len(source.Name) == 0 {
-		return errors.New("missing `name`")
-	}
-	if len(source.PkgList) == 0 {
-		return errors.New("missing `pkglist`")
+func (mgr *Manager) validateWith(nss map[string]Namespace) error {
+	if len(mgr.Namespace) == 0 {
+		return errors.New("missing `namespace`")
 	}
 
-	for _, s := range lists {
-		if s.Name == source.PkgList {
+	for nsName := range nss {
+		if nsName == mgr.Namespace {
 			return nil
 		}
 	}
-	return fmt.Errorf("pkglist `%v` does not exist", source.PkgList)
+	return fmt.Errorf("namespace `%s` does not exist", mgr.Namespace)
 
-}
-
-// GetSource gets the package source with the specified name
-func (c *Config) GetSource(name string) (PkgSource, bool) {
-	for _, p := range c.Sources {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return PkgSource{}, false
-}
-
-// GetList gets the package list with the specified name
-func (c *Config) GetList(name string) (PkgList, bool) {
-	for _, p := range c.PkgLists {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return PkgList{}, false
 }
 
 // ConfigFromViper parses a config obj from Viper and validates it

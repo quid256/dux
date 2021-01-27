@@ -47,17 +47,16 @@ var generateCmd = &cobra.Command{
 
 		var b strings.Builder
 
-		for _, pkglist := range cfg.PkgLists {
+		for nsName, ns := range cfg.Namespaces {
 			var prefix string
 
-			src, _ := cfg.GetSource(pkglist.DefaultSource)
-			prefix = fmt.Sprintf("(%s) ", src.Name)
+			prefix = fmt.Sprintf("(%s) ", ns.DefaultManager)
 
-			cmd := exec.Command("bash", "-c", pkglist.ListCmd)
+			cmd := exec.Command("bash", "-c", ns.ListCmd)
 
 			out, err := cmd.Output()
 			if err != nil {
-				fmt.Printf("Error executing ListCmd for `%s`: %v\n", pkglist.Name, err)
+				fmt.Printf("Error executing ListCmd for `%s`: %v\n", nsName, err)
 				return
 			}
 

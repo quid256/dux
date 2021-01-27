@@ -35,12 +35,15 @@ var syncCmd = &cobra.Command{
 	Use:   "sync",
 	Short: "Synchronizes the package state with what's in the configuration",
 	Run: func(cmd *cobra.Command, args []string) {
+
+		// Load config file
 		cfg, err := utils.ConfigFromViper()
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
+		// Get a collection of the packages targetted by the pkgs folder
 		targets, err := utils.GetTargetPackages(cfg, path.Join(cfgDir, "pkgs"))
 		if err != nil {
 			fmt.Println(err)
@@ -50,44 +53,36 @@ var syncCmd = &cobra.Command{
 		toInstall := make(map[string][]string)
 		toRemove := make(map[string][]string)
 
-		for _, pkglist := range cfg.PkgLists {
-			installed, err := utils.GetInstalledPackages(pkglist)
+		for nsName, ns := range cfg.Namespaces {
+			// Get the installed packages in this namespace
+			installed, err := utils.GetInstalledPackages(ns)
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
 
-			// Remove matches
-			for k := range targets[pkglist.Name] {
+			// Remove packages that are both installed and targetted for this namespace
+			for k := range targets[nsName] {
 				if _, ok := installed[k]; ok {
-					delete(targets[pkglist.Name], k)
+					delete(targets[nsName], k)
 					delete(installed, k)
 				}
 			}
 
+			// Construct installation and removal maps
 			srcToPkg := make(map[string][]string)
-			for k, v := range targets[pkglist.Name] {
+			for k, v := range targets[nsName] {
 				srcToPkg[v] = append(srcToPkg[v], k)
 				toInstall[v] = append(toInstall[v], k)
 			}
 
 			for k := range installed {
-				toRemove[pkglist.Name] = append(toRemove[pkglist.Name], k)
+				toRemove[nsName] = append(toRemove[nsName], k)
 			}
 
+			// Display tasks to user
 			if len(srcToPkg) > 0 || len(installed) > 0 {
-				fmt.Printf("# PkgList %s\n", pkglist.Name)
-
-				if len(installed) > 0 {
-					fmt.Printf("Remove:")
-					for k := range installed {
-						fmt.Printf("  %s", k)
-					}
-					if len(installed) == 0 {
-						fmt.Printf("  (none)")
-					}
-					fmt.Println()
-				}
+				fmt.Printf("# PkgList %s\n", nsName)
 
 				if len(srcToPkg) > 0 {
 					fmt.Print("Install:")
@@ -97,6 +92,17 @@ var syncCmd = &cobra.Command{
 						for _, pkg := range v {
 							fmt.Printf("  %s", pkg)
 						}
+					}
+					fmt.Println()
+				}
+
+				if len(installed) > 0 {
+					fmt.Printf("Remove:")
+					for k := range installed {
+						fmt.Printf("  %s", k)
+					}
+					if len(installed) == 0 {
+						fmt.Printf("  (none)")
 					}
 					fmt.Println()
 				}
@@ -116,6 +122,7 @@ var syncCmd = &cobra.Command{
 			return
 		}
 
+		// Actually add/remove the appropriate packages
 		if len(toRemove) > 0 {
 			fmt.Println("## Removing Packages")
 			utils.RemovePackages(cfg, toRemove, dryRun)

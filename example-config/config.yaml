@@ -1,51 +1,64 @@
-pkglists:
-  - name: arch-official
-    list: comm -23 <(pacman -Qe | sort) <(pacman -Qm | sort) | sed -E 's/([^ ]+) .*/\1/g'
-    remove: |
+namespaces:
+  arch-official:
+    list-cmd: comm -23 <(pacman -Qe | sort) <(pacman -Qm | sort) | sed -E 's/([^ ]+) .*/\1/g'
+    remove-cmd: |
         # Find a list of all packages that no other package depends on
         UNDEPS=$(pacman -Qt | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-        # If a packages has no dependers, then removal is explicit. Otherwise, the packages is just marked --asdeps
+        # If a packages has no dependers, then removal is explicit. Otherwise,
+        # the packages is just marked --asdeps
         TOMARK=$(comm -12 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
         TOREMOVE=$(comm -13 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
 
         [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asdeps $TOMARK
         [[ ! -z $(echo $TOREMOVE | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -Rns $TOREMOVE
 
-    default-source: arch-repo # TODO: maybe merge these two pkglists, and instead have default-source be a callable bash script?
+    default-manager: pacman
 
-  - name: arch-unofficial
-    list: pacman -Qme | sed -E 's/([^ ]+) .*/\1/g'
-    remove: |
+  arch-unofficial:
+    list-cmd: pacman -Qme | sed -E 's/([^ ]+) .*/\1/g'
+    remove-cmd: |
         # Find a list of all packages that no other package depends on
         UNDEPS=$(pacman -Qt | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-        # If a packages has no dependers, then removal is explicit. Otherwise, the packages is just marked --asdeps
+        # If a packages has no dependers, then removal is explicit. Otherwise,
+        # the packages is just marked --asdeps
         TOMARK=$(comm -12 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
         TOREMOVE=$(comm -13 <(echo $UNDEPS) <(echo $PKGS | tr " " "\n" | sort))
 
         [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asdeps $TOMARK
         [[ ! -z $(echo $TOREMOVE | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -Rns $TOREMOVE
 
-    default-source: aur
+    default-manager: aur
 
-sources:
-  - name: arch-repo
-    pkglist: arch-official
-    install: |
+managers:
+  pacman:
+    namespace: arch-official
+    install-cmd: |
         # Find a list of all packages that are already installed --asdeps
         DEPS=$(pacman -Qd | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-        # If a package is already installed --asdeps, it need only be marked --asexplicit. Otherwise, explict install is necessary
+        # If a package is already installed --asdeps, it need only be marked
+        # --asexplicit. Otherwise, explicit install is necessary
         TOMARK=$(comm -12 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
         TOINSTALL=$(comm -13 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
 
         [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asexplicit $TOMARK
         [[ ! -z $(echo $TOINSTALL | sed 's/[ \n]//g') ]] && sudo pacman --noconfirm -S $TOINSTALL
+  
+  aur:
+    namespace: arch-unofficial
+    install-cmd: |
+        # Find a list of all packages that are already installed --asdeps
+        DEPS=$(pacman -Qd | sed -E 's/([^ ]+) .*/\1/g' | sort)
 
-  - name: aur
-    pkglist: arch-unofficial
-    install: yay --noconfirm -S $PKGS # TODO this likely needs to be modified
+        # If a package is already installed --asdeps, it need only be marked
+        # --asexplicit. Otherwise, explicit install is necessary
+        TOMARK=$(comm -12 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
+        TOINSTALL=$(comm -13 <(echo $DEPS) <(echo $PKGS | tr " " "\n" | sort))
 
-  - name: abs-manual
-    pkglist: arch-unofficial
+        [[ ! -z $(echo $TOMARK | sed 's/[ \n]//g') ]] && sudo pacman -D --asexplicit $TOMARK
+        [[ ! -z $(echo $TOINSTALL | sed 's/[ \n]//g') ]] && yay --noconfirm -S $TOINSTALL
+  
+  abs-manual:
+    namespace: arch-unofficial
